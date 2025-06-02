@@ -252,7 +252,7 @@ function TimerComponent() {
 
       <Card
         ref={cardRef}
-        className="w-full max-w-md bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-slate-200 dark:border-slate-700 shadow-2xl transition-opacity duration-300"
+        className="w-full max-w-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-slate-200 dark:border-slate-700 shadow-2xl transition-opacity duration-300 ml-2"
         style={ isClientMounted ? {
           position: 'absolute',
           left: `${cardPosition.x}px`,
@@ -266,11 +266,11 @@ function TimerComponent() {
           opacity: 0,
         }}
       >
-        <CardHeader className="text-center relative pt-6 pb-4">
+        <CardHeader className="text-center relative pt-6 pb-4 px-8">
           <CardTitle className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 dark:from-purple-400 dark:via-pink-400 dark:to-red-400">
             Таймер-Мотиуатор
           </CardTitle>
-          <Button variant="outline" size="icon" onClick={toggleTheme} className="absolute top-3 right-3 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+          <Button variant="outline" size="icon" onClick={toggleTheme} className="absolute top-3 right-4 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">
             {theme === 'light' ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5 text-yellow-400" />}
           </Button>
         </CardHeader>
