@@ -207,8 +207,8 @@ function TimerComponent() {
         y: (window.innerHeight - cardDimensions.height) / 2,
       });
       setCardVelocity({ 
-        dx: (Math.random() - 0.5) * 5,
-        dy: (Math.random() - 0.5) * 5
+        dx: (Math.random() - 0.5) * 8,
+        dy: (Math.random() - 0.5) * 8
       });
     }
   };
