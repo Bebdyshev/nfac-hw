@@ -7,13 +7,13 @@ import { Analytics } from '@vercel/analytics/react'
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "EcoNerds Case Competition",
+  title: "Timer-Motivator",
   description:
-    "Join the premier economic case competition in Aktobe. Showcase your analytical skills and win amazing prizes.",
+    "Timer-Motivator is a tool that helps you stay focused and motivated.",
   icons: {
     icon: [
       {
-        url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>",
+        url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏲️</text></svg>",
         type: "image/svg+xml",
       },
     ],
