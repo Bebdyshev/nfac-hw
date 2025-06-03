@@ -19,6 +19,8 @@ const mockChats: Chat[] = [
     unread: 0,
     online: true,
     isPinned: true,
+    isFavorite: true,
+    isArchived: false,
     messages: [
       {
         id: "1",
@@ -34,8 +36,10 @@ const mockChats: Chat[] = [
     avatar: "👨‍🔬",
     lastMessage: "Hello! I'm a data scientist with expertise in machine learning and AI. What would you like to discuss?",
     time: new Date().toISOString(),
-    unread: 2,
+    unread: 0,
     online: true,
+    isFavorite: false,
+    isArchived: false,
     messages: [
       {
         id: "1",
@@ -51,8 +55,10 @@ const mockChats: Chat[] = [
     avatar: "👩‍🎨",
     lastMessage: "Hi there! I'm a UX/UI designer passionate about creating beautiful and functional interfaces. How can I assist you?",
     time: new Date().toISOString(),
-    unread: 5,
+    unread: 0,
     online: false,
+    isFavorite: false,
+    isArchived: true,
     messages: [
       {
         id: "1",
@@ -72,6 +78,7 @@ function TelegramDesktopContent() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [messageSearchQuery, setMessageSearchQuery] = useState("")
+  const [activeFilter, setActiveFilter] = useState<string>("all")
 
   // Load chats from localStorage on mount
   useEffect(() => {
@@ -82,6 +89,8 @@ function TelegramDesktopContent() {
         // Convert string timestamps back to Date objects
         const chatsWithDates = parsedChats.map((chat: any) => ({
           ...chat,
+          isFavorite: chat.isFavorite || false,
+          isArchived: chat.isArchived || false,
           messages: chat.messages.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp),
@@ -89,7 +98,20 @@ function TelegramDesktopContent() {
           }))
         }))
         setChats(chatsWithDates)
-        setSelectedChat(chatsWithDates[0])
+        
+        // Initialize selectedChat based on the active filter
+        const initialSelectable = chatsWithDates.filter((c: Chat) => 
+          activeFilter === "archived" ? c.isArchived : 
+          activeFilter === "favorites" ? c.isFavorite && !c.isArchived : 
+          !c.isArchived
+        )
+        
+        if (initialSelectable.length > 0) {
+          setSelectedChat(initialSelectable[0])
+        } else {
+          const fallback = chatsWithDates.find((c: Chat) => !c.isArchived) || chatsWithDates[0]
+          if (fallback) setSelectedChat(fallback)
+        }
       } catch (error) {
         console.error('Error loading chats from localStorage:', error)
         // If there's an error, use mock data
@@ -171,10 +193,86 @@ function TelegramDesktopContent() {
     }
   })
 
-  const filteredChats = chats.filter((chat) => 
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Toggle a chat as favorite
+  const toggleFavorite = (chatId: string) => {
+    setChats(prevChats =>
+      prevChats.map(chat =>
+        chat.id === chatId ? { ...chat, isFavorite: !chat.isFavorite } : chat
+      )
+    )
+  }
 
+  // Toggle a chat as archived
+  const toggleArchive = (chatId: string) => {
+    setChats(prevChats =>
+      prevChats.map(chat =>
+        chat.id === chatId ? { ...chat, isArchived: !chat.isArchived } : chat
+      )
+    )
+  }
+
+  // Filter chats based on search query and active filter
+  const filteredChats = chats.filter((chat) => {
+    // First apply the filter (all, favorites, archived)
+    let passesFilter = false;
+    
+    if (activeFilter === "all") {
+      passesFilter = !chat.isArchived; // All chats except archived
+    } else if (activeFilter === "favorites") {
+      passesFilter = !!chat.isFavorite && !chat.isArchived; // Only favorites that aren't archived
+    } else if (activeFilter === "archived") {
+      passesFilter = !!chat.isArchived; // Only archived chats
+    }
+    
+    if (!passesFilter) return false;
+    
+    // Then apply the search query filter
+    if (!searchQuery.trim()) return true;
+    
+    return (
+      chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Update selected chat when filters change
+  useEffect(() => {
+    // Get list of chats that pass the current filter
+    const currentFilteredChats = chats.filter((chat) => {
+      if (activeFilter === "all") return !chat.isArchived;
+      if (activeFilter === "favorites") return !!chat.isFavorite && !chat.isArchived;
+      if (activeFilter === "archived") return !!chat.isArchived;
+      return false;
+    }).filter(chat => {
+      if (!searchQuery.trim()) return true;
+      return chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+    
+    // If the currently selected chat doesn't pass the filter, select a new one
+    if (selectedChat) {
+      const isSelectedStillValid = currentFilteredChats.some(c => c.id === selectedChat.id);
+      if (!isSelectedStillValid) {
+        if (currentFilteredChats.length > 0) {
+          setSelectedChat(currentFilteredChats[0]);
+        } else {
+          // Fallback to a visible chat or the first chat
+          const fallbackList = chats.filter(c => 
+            activeFilter === "archived" ? c.isArchived : !c.isArchived
+          );
+          if (fallbackList.length > 0) {
+            setSelectedChat(fallbackList[0]);
+          } else {
+            setSelectedChat(chats[0]);
+          }
+        }
+      }
+    } else if (currentFilteredChats.length > 0) {
+      setSelectedChat(currentFilteredChats[0]);
+    }
+  }, [chats, activeFilter, searchQuery, selectedChat]);
+
+  // Filter messages based on message search query
   const filteredMessages = selectedChat.messages.filter(message =>
     message.content.toLowerCase().includes(messageSearchQuery.toLowerCase())
   )
@@ -310,6 +408,10 @@ function TelegramDesktopContent() {
         searchQuery={searchQuery}
         onChatSelect={setSelectedChat}
         onSearchChange={setSearchQuery}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        onToggleFavorite={toggleFavorite}
+        onToggleArchive={toggleArchive}
       />
 
       <div className="flex-1 flex flex-col relative">

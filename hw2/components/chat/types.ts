@@ -8,6 +8,8 @@ export interface Chat {
   online: boolean
   isBot?: boolean
   isPinned?: boolean
+  isFavorite?: boolean
+  isArchived?: boolean
   messages: Message[]
 }
 
@@ -30,6 +32,10 @@ export interface ChatListProps {
   searchQuery: string
   onChatSelect: (chat: Chat) => void
   onSearchChange: (query: string) => void
+  activeFilter: string
+  onFilterChange: (filter: string) => void
+  onToggleFavorite: (chatId: string) => void
+  onToggleArchive: (chatId: string) => void
 }
 
 export interface ChatHeaderProps {
