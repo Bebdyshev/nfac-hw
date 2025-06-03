@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -7,29 +8,23 @@ import { TimeDisplay } from "./TimeDisplay"
 import { MessageProps } from "./types"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Components } from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { ReplyIcon, CheckIcon, CheckCheckIcon } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import type { Components } from 'react-markdown'
+import type { SyntaxHighlighterProps } from 'react-syntax-highlighter'
+
+interface CodeComponentProps extends React.ComponentPropsWithoutRef<'code'> {
+  node?: any
+  inline?: boolean
+}
 
 export function Message({ message, chat, onReply }: MessageProps) {
-  const components: Components = {
-    p: ({ children }) => <p className="text-sm">{children}</p>,
-    code: ({ node, inline, className, children, ...props }: { node?: any; inline?: boolean; className?: string; children: React.ReactNode }) => (
-      <code className={`${inline ? 'bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded' : 'block bg-gray-100 dark:bg-gray-700 p-2 rounded my-2'} ${className || ''}`} {...props}>
-        {children}
-      </code>
-    ),
-    pre: ({ children }) => (
-      <pre className="bg-gray-100 dark:bg-gray-700 p-2 rounded my-2 overflow-x-auto">
-        {children}
-      </pre>
-    ),
-    ul: ({ children }) => <ul className="list-disc list-inside my-2">{children}</ul>,
-    ol: ({ children }) => <ol className="list-decimal list-inside my-2">{children}</ol>,
-    li: ({ children }) => <li className="text-sm">{children}</li>,
-    a: ({ href, children }) => (
-      <a href={href} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">
-        {children}
-      </a>
-    ),
+  const [isHovered, setIsHovered] = useState(false)
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   return (
@@ -39,6 +34,8 @@ export function Message({ message, chat, onReply }: MessageProps) {
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.2 }}
       className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} message-animation`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {message.sender !== "user" && (
         <Avatar className="h-8 w-8 mr-2 mt-1">
@@ -61,9 +58,27 @@ export function Message({ message, chat, onReply }: MessageProps) {
         >
           {message.sender === "bot" ? (
             <div className="prose dark:prose-invert prose-sm max-w-none">
-              <ReactMarkdown 
+              <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={components}
+                components={{
+                  code: ({ node, inline, className, children, ...props }: CodeComponentProps) => {
+                    const match = /language-(\w+)/.exec(className || '')
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        style={vscDarkPlus as any}
+                        language={match[1]}
+                        PreTag="div"
+                        {...(props as SyntaxHighlighterProps)}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    )
+                  }
+                }}
               >
                 {message.content}
               </ReactMarkdown>
@@ -75,7 +90,11 @@ export function Message({ message, chat, onReply }: MessageProps) {
             <TimeDisplay date={message.timestamp} />
             {message.sender === "user" && (
               <span className="text-xs text-gray-500">
-                {message.status === 'read' ? '✓✓' : '✓'}
+                {message.status === 'sent' ? (
+                  <CheckIcon className="h-3 w-3" />
+                ) : message.status === 'read' ? (
+                  <CheckCheckIcon className="h-3 w-3" />
+                ) : null}
               </span>
             )}
           </div>
@@ -91,6 +110,23 @@ export function Message({ message, chat, onReply }: MessageProps) {
           </Button>
         )}
       </div>
+      {isHovered && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute -left-10 top-1/2 -translate-y-1/2 h-8 w-8"
+              onClick={() => onReply(message)}
+            >
+              <ReplyIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reply</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </motion.div>
   )
 } 
