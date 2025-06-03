@@ -1,381 +1,352 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { SunIcon, MoonIcon } from 'lucide-react';
-import { Progress } from "@/components/ui/progress";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import ReactConfetti from 'react-confetti';
+import { useState, useEffect } from "react"
+import { useChat } from "ai/react"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { ChatList } from "@/components/chat/ChatList"
+import { ChatHeader } from "@/components/chat/ChatHeader"
+import { MessageList } from "@/components/chat/MessageList"
+import { MessageInput } from "@/components/chat/MessageInput"
+import { Chat, Message } from "@/components/chat/types"
 
-// Theme Context
-interface ThemeContextType {
-  theme: string;
-  toggleTheme: () => void;
-}
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const mockChats: Chat[] = [
+  {
+    id: "1",
+    name: "Sarah Chen",
+    avatar: "👩‍💻",
+    lastMessage: "Hi! I'm a senior software engineer specializing in web development. How can I help you today?",
+    time: new Date().toISOString(),
+    unread: 0,
+    online: true,
+    isPinned: true,
+    messages: [
+      {
+        id: "1",
+        content: "Hi! I'm a senior software engineer specializing in web development. How can I help you today?",
+        sender: "bot",
+        timestamp: new Date(),
+      },
+    ],
+  },
+  {
+    id: "2",
+    name: "Dr. Michael Rodriguez",
+    avatar: "👨‍🔬",
+    lastMessage: "Hello! I'm a data scientist with expertise in machine learning and AI. What would you like to discuss?",
+    time: new Date().toISOString(),
+    unread: 2,
+    online: true,
+    messages: [
+      {
+        id: "1",
+        content: "Hello! I'm a data scientist with expertise in machine learning and AI. What would you like to discuss?",
+        sender: "bot",
+        timestamp: new Date(),
+      },
+    ],
+  },
+  {
+    id: "3",
+    name: "Emma Thompson",
+    avatar: "👩‍🎨",
+    lastMessage: "Hi there! I'm a UX/UI designer passionate about creating beautiful and functional interfaces. How can I assist you?",
+    time: new Date().toISOString(),
+    unread: 5,
+    online: false,
+    messages: [
+      {
+        id: "1",
+        content: "Hi there! I'm a UX/UI designer passionate about creating beautiful and functional interfaces. How can I assist you?",
+        sender: "bot",
+        timestamp: new Date(),
+      },
+    ],
+  },
+]
 
-const DURATION_OPTIONS = [10, 20, 30];
+function TelegramDesktopContent() {
+  const [selectedChat, setSelectedChat] = useState<Chat>(mockChats[0])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [chats, setChats] = useState<Chat[]>(mockChats)
+  const [input, setInput] = useState("")
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [messageSearchQuery, setMessageSearchQuery] = useState("")
 
-interface Quote {
-  id: number;
-  text: string;
-  author: string;
-}
-
-// Theme Provider Component
-function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState('light');
-
+  // Load chats from localStorage on mount
   useEffect(() => {
-    const storedTheme = localStorage.getItem('appTheme');
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setTheme(storedTheme || (prefersDark ? 'dark' : 'light'));
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('appTheme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
-
-// Main Home Component
-function TimerComponent() {
-  const { theme, toggleTheme } = useContext(ThemeContext)!;
-  const [showConfetti, setShowConfetti] = useState(false);
-
-  const [name, setName] = useState('');
-  const [selectedDuration, setSelectedDuration] = useState(DURATION_OPTIONS[0]);
-  const [timeLeft, setTimeLeft] = useState(selectedDuration);
-  const [isActive, setIsActive] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [fetchedQuote, setFetchedQuote] = useState<Quote | null>(null);
-  const [showNameAlert, setShowNameAlert] = useState(false);
-  const [completionCount, setCompletionCount] = useState(0);
-
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [cardPosition, setCardPosition] = useState({ x: 0, y: 0 });
-  const [cardVelocity, setCardVelocity] = useState({ dx: 1, dy: 1 });
-  const [cardDimensions, setCardDimensions] = useState({ width: 0, height: 0 });
-  const [isCardInitialized, setIsCardInitialized] = useState(false);
-  const [isClientMounted, setIsClientMounted] = useState(false);
-  const [isMovingToCenter, setIsMovingToCenter] = useState(false);
-
-  useEffect(() => {
-    setIsClientMounted(true);
-    const storedName = localStorage.getItem('timerUserName');
-    if (storedName) setName(storedName);
-    setCompletionCount(parseInt(localStorage.getItem('timerCompletionCount') || '0', 10));
-  }, []);
-
-  useEffect(() => { if (name && isClientMounted) localStorage.setItem('timerUserName', name); }, [name, isClientMounted]);
-
-  const fetchNewQuote = async () => {
-    setFetchedQuote(null);
-    try {
-      const response = await fetch('/api/quotes');
-      if (!response.ok) throw new Error('Failed to fetch quote');
-      const quoteData: Quote = await response.json();
-      setFetchedQuote(quoteData);
-    } catch (error) {
-      console.error("Error fetching quote:", error);
-      setFetchedQuote({ id: 0, text: "Keep it up! Every step forward is progress.", author: "Your App" });
-    }
-  };
-
-  useEffect(() => {
-    let timerIntervalId: NodeJS.Timeout | null = null;
-    if (isActive && timeLeft > 0) {
-      timerIntervalId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0 && isActive) {
-      setIsActive(false);
-      setIsCompleted(true);
-      setShowConfetti(true);
-      fetchNewQuote();
-      if (isClientMounted) {
-        const newCount = parseInt(localStorage.getItem('timerCompletionCount') || '0', 10) + 1;
-        localStorage.setItem('timerCompletionCount', newCount.toString());
-        setCompletionCount(newCount);
+    const savedChats = localStorage.getItem('chats')
+    if (savedChats) {
+      try {
+        const parsedChats = JSON.parse(savedChats)
+        // Convert string timestamps back to Date objects
+        const chatsWithDates = parsedChats.map((chat: any) => ({
+          ...chat,
+          messages: chat.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+            replyTo: msg.replyTo ? { ...msg.replyTo, timestamp: new Date(msg.replyTo.timestamp) } : undefined
+          }))
+        }))
+        setChats(chatsWithDates)
+        setSelectedChat(chatsWithDates[0])
+      } catch (error) {
+        console.error('Error loading chats from localStorage:', error)
+        // If there's an error, use mock data
+        setChats(mockChats)
+        setSelectedChat(mockChats[0])
       }
-      setTimeout(() => setShowConfetti(false), 5000);
     }
-    return () => { if (timerIntervalId) clearInterval(timerIntervalId); };
-  }, [isActive, timeLeft, isClientMounted]);
+  }, [])
 
+  // Save chats to localStorage whenever they change
   useEffect(() => {
-    const cardElement = cardRef.current;
-    if (cardElement && isClientMounted) {
-      const updateDimensionsAndPos = () => {
-        const width = cardElement.offsetWidth;
-        const height = cardElement.offsetHeight;
-        setCardDimensions({ width, height });
-        if (!isCardInitialized) {
-           setCardPosition({ x: (window.innerWidth - width) / 2, y: (window.innerHeight - height) / 2 });
-           setIsCardInitialized(true);
-        }
-      };
-      updateDimensionsAndPos();
-      const resizeObserver = new ResizeObserver(updateDimensionsAndPos);
-      resizeObserver.observe(cardElement);
-      window.addEventListener('resize', updateDimensionsAndPos);
-      return () => {
-        resizeObserver.unobserve(cardElement);
-        window.removeEventListener('resize', updateDimensionsAndPos);
-      };
+    try {
+      localStorage.setItem('chats', JSON.stringify(chats))
+    } catch (error) {
+      console.error('Error saving chats to localStorage:', error)
     }
-  }, [isClientMounted, isCardInitialized]);
+  }, [chats])
 
+  // Theme handling
   useEffect(() => {
-    if (!isClientMounted || !isCardInitialized || cardDimensions.width === 0) return;
-    let animationFrameId: number;
-    if (!isActive) { 
-      setIsMovingToCenter(true);
-      const targetX = (window.innerWidth - cardDimensions.width) / 2;
-      const targetY = (window.innerHeight - cardDimensions.height) / 2;
-      const animate = () => {
-        if (!isMovingToCenter && animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          return;
-        }
-        setCardPosition(prevPos => {
-          const dx = targetX - prevPos.x;
-          const dy = targetY - prevPos.y;
-          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-            setIsMovingToCenter(false);
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            return { x: targetX, y: targetY };
-          }
-          return { x: prevPos.x + dx * 0.08, y: prevPos.y + dy * 0.08 };
-        });
-        if (isMovingToCenter) animationFrameId = requestAnimationFrame(animate);
-      };
-      animationFrameId = requestAnimationFrame(animate);
-    } else {
-      setIsMovingToCenter(false); 
-      const animate = () => {
-        setCardPosition(prevPos => {
-          let newX = prevPos.x + cardVelocity.dx;
-          let newY = prevPos.y + cardVelocity.dy;
-          let newDx = cardVelocity.dx;
-          let newDy = cardVelocity.dy;
-          if (newX <= 0 || newX + cardDimensions.width >= window.innerWidth) newDx = -newDx;
-          if (newY <= 0 || newY + cardDimensions.height >= window.innerHeight) newDy = -newDy;
-          newX = Math.max(0, Math.min(newX, window.innerWidth - cardDimensions.width));
-          newY = Math.max(0, Math.min(newY, window.innerHeight - cardDimensions.height));
-          if (newDx !== cardVelocity.dx || newDy !== cardVelocity.dy) setCardVelocity({ dx: newDx, dy: newDy });
-          return { x: newX, y: newY };
-        });
-        animationFrameId = requestAnimationFrame(animate);
-      };
-      animationFrameId = requestAnimationFrame(animate);
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark'
+    if (savedTheme) {
+      setTheme(savedTheme)
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark')
     }
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isActive, isClientMounted, isCardInitialized, cardDimensions, cardVelocity, isMovingToCenter]);
+  }, [])
 
-  const handleStart = () => {
-    if (name.trim() === '') {
-      setShowNameAlert(true);
-      return;
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light'
+    setTheme(newTheme)
+    localStorage.setItem('theme', newTheme)
+    document.documentElement.classList.toggle('dark', newTheme === 'dark')
+  }
+
+  const { messages, handleSubmit, isLoading } = useChat({
+    api: "/api/chat",
+    body: {
+      messages: [
+        {
+          role: "system",
+          content: `You are ${selectedChat.name}, a human expert in your field. ${
+            selectedChat.id === "1" 
+              ? "You are a senior software engineer with 10+ years of experience in web development, specializing in React, Node.js, and modern web technologies. You provide practical, code-focused solutions and best practices."
+              : selectedChat.id === "2"
+              ? "You are a data scientist with a PhD in Computer Science, specializing in machine learning, AI, and data analysis. You provide detailed explanations about ML concepts, algorithms, and data processing techniques."
+              : "You are a UX/UI designer with extensive experience in creating user-centered designs. You provide insights about design principles, user experience, and visual aesthetics."
+          } Keep your responses professional but friendly, and always stay in character as a human expert.`,
+        },
+      ],
+    },
+    onFinish: (message) => {
+      if (!message.content) {
+        console.error('No content in bot response:', message)
+        return
+      }
+
+      const botMessage: Message = {
+        id: Date.now().toString(),
+        content: message.content,
+        sender: 'bot',
+        timestamp: new Date(),
+      }
+
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          chat.id === selectedChat.id
+            ? {
+                ...chat,
+                lastMessage: message.content,
+                time: new Date().toISOString(),
+                messages: [...chat.messages, botMessage],
+              }
+            : chat
+        )
+      )
+    },
+    onError: (error) => {
+      console.error('Chat error:', error)
     }
-    setTimeLeft(selectedDuration);
-    setIsActive(true);
-    setIsCompleted(false);
-    setFetchedQuote(null);
-    setIsMovingToCenter(false); 
+  })
 
-    if (isClientMounted && cardDimensions.width > 0 && cardDimensions.height > 0) {
-      setCardPosition({
-        x: (window.innerWidth - cardDimensions.width) / 2,
-        y: (window.innerHeight - cardDimensions.height) / 2,
-      });
-      setCardVelocity({ 
-        dx: (Math.random() - 0.5) * 8,
-        dy: (Math.random() - 0.5) * 8
-      });
+  const filteredChats = chats.filter((chat) => 
+    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const filteredMessages = selectedChat.messages.filter(message =>
+    message.content.toLowerCase().includes(messageSearchQuery.toLowerCase())
+  )
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim()) return
+
+    const messageContent = input.trim()
+    setInput("")
+    setReplyTo(null)
+
+    const currentTime = new Date()
+    const formattedTime = currentTime.toISOString()
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: messageContent,
+      sender: 'user',
+      timestamp: currentTime,
+      status: 'sent',
+      replyTo: replyTo || undefined
     }
-  };
 
-  const handleReset = () => {
-    setIsActive(false);
-    setIsCompleted(false);
-    setTimeLeft(selectedDuration);
-    setFetchedQuote(null);
-    setShowConfetti(false);
-  };
+    setChats((prevChats) =>
+      prevChats.map((chat) =>
+        chat.id === selectedChat.id
+          ? {
+              ...chat,
+              lastMessage: messageContent,
+              time: formattedTime,
+              messages: [...chat.messages, userMessage],
+            }
+          : chat
+      )
+    )
 
-  const progressValue = isActive && isClientMounted ? ((selectedDuration - timeLeft) / selectedDuration) * 100 : 0;
+    setSelectedChat((prev) => ({
+      ...prev,
+      lastMessage: messageContent,
+      time: formattedTime,
+      messages: [...prev.messages, userMessage],
+    }))
+
+    const messageData = {
+      messages: [
+        {
+          role: "system",
+          content: `You are ${selectedChat.name}, a human expert in your field. ${
+            selectedChat.id === "1" 
+              ? "You are a senior software engineer with 10+ years of experience in web development, specializing in React, Node.js, and modern web technologies. You provide practical, code-focused solutions and best practices."
+              : selectedChat.id === "2"
+              ? "You are a data scientist with a PhD in Computer Science, specializing in machine learning, AI, and data analysis. You provide detailed explanations about ML concepts, algorithms, and data processing techniques."
+              : "You are a UX/UI designer with extensive experience in creating user-centered designs. You provide insights about design principles, user experience, and visual aesthetics."
+          } Keep your responses professional but friendly, and always stay in character as a human expert.`,
+        },
+        {
+          role: "user",
+          content: messageContent,
+        },
+      ],
+    }
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messageData),
+      })
+
+      if (!response.ok) {
+        console.error('Failed to send message:', await response.text())
+        return
+      }
+
+      const data = await response.json()
+
+      const botMessage: Message = {
+        id: Date.now().toString(),
+        content: data.response,
+        sender: 'bot',
+        timestamp: new Date(),
+      }
+
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          chat.id === selectedChat.id
+            ? {
+                ...chat,
+                lastMessage: data.response,
+                time: new Date().toISOString(),
+                messages: [...chat.messages, botMessage],
+              }
+            : chat
+        )
+      )
+
+      setSelectedChat((prev) => ({
+        ...prev,
+        lastMessage: data.response,
+        time: new Date().toISOString(),
+        messages: [...prev.messages, botMessage],
+      }))
+
+      // Update message status to 'read' after bot responds
+      setTimeout(() => {
+        setChats((prevChats) =>
+          prevChats.map((chat) =>
+            chat.id === selectedChat.id
+              ? {
+                  ...chat,
+                  messages: chat.messages.map(msg =>
+                    msg.id === userMessage.id ? { ...msg, status: 'read' } : msg
+                  ),
+                }
+              : chat
+          )
+        )
+      }, 1000)
+
+    } catch (error) {
+      console.error('Error sending message:', error)
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:via-purple-900 dark:to-slate-900 relative overflow-hidden text-slate-800 dark:text-white transition-colors duration-300 ease-in-out">
-      {showConfetti && (
-        <ReactConfetti
-          width={window.innerWidth}
-          height={window.innerHeight}
-          recycle={false}
-          numberOfPieces={200}
-          gravity={0.3}
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+      <ChatList
+        chats={filteredChats}
+        selectedChat={selectedChat}
+        searchQuery={searchQuery}
+        onChatSelect={setSelectedChat}
+        onSearchChange={setSearchQuery}
+      />
+
+      <div className="flex-1 flex flex-col relative">
+        <div className={`absolute inset-0 ${theme === 'dark' ? 'telegram-bg-dark' : 'telegram-bg-light'}`}></div>
+        
+        <ChatHeader
+          chat={selectedChat}
+          messageSearchQuery={messageSearchQuery}
+          onMessageSearchChange={setMessageSearchQuery}
+          theme={theme}
+          onThemeToggle={toggleTheme}
         />
-      )}
-      <AlertDialog open={showNameAlert} onOpenChange={setShowNameAlert}>
-        <AlertDialogContent className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-slate-900 dark:text-white">Требуется имя</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-600 dark:text-slate-400">
-              Пожалуйста, введите ваше имя, чтобы начать таймер.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setShowNameAlert(false)} className="bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-500 dark:hover:bg-purple-600">
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
-      <Card
-        ref={cardRef}
-        className="w-full max-w-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-slate-200 dark:border-slate-700 shadow-2xl transition-opacity duration-300 ml-2"
-        style={ isClientMounted ? {
-          position: 'absolute',
-          left: `${cardPosition.x}px`,
-          top: `${cardPosition.y}px`,
-          width: cardDimensions.width > 0 ? `${cardDimensions.width}px` : 'auto',
-          visibility: isCardInitialized ? 'visible' : 'hidden',
-          opacity: isCardInitialized ? 1 : 0,
-        } : {
-          position: 'absolute',
-          visibility: 'hidden',
-          opacity: 0,
-        }}
-      >
-        <CardHeader className="text-center relative pt-6 pb-4 px-8">
-          <CardTitle className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 dark:from-purple-400 dark:via-pink-400 dark:to-red-400">
-            Таймер-Мотиуатор
-          </CardTitle>
-          <Button variant="outline" size="icon" onClick={toggleTheme} className="absolute top-3 right-4 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">
-            {theme === 'light' ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5 text-yellow-400" />}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isActive && (
-            <div className="px-1 pt-1">
-              <Progress value={progressValue} className="w-full h-2 [&>div]:bg-gradient-to-r [&>div]:from-green-500 [&>div]:to-teal-500 dark:[&>div]:from-green-400 dark:[&>div]:to-teal-400" />
-            </div>
-          )}
+        <MessageList
+          messages={filteredMessages}
+          chat={selectedChat}
+          onReply={setReplyTo}
+        />
 
-          {!isCompleted && !isActive && (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  Введите ваше имя:
-                </label>
-                <Input
-                  type="text" id="name" value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="Например, Керей"
-                  className="bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-purple-500 focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="duration" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  Выберите время (сек):
-                </label>
-                <Select value={selectedDuration.toString()} onValueChange={(val) => { const dur = parseInt(val); setSelectedDuration(dur); if (!isActive) setTimeLeft(dur); }}>
-                  <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:ring-purple-500">
-                    <SelectValue placeholder="Выберите время" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
-                    {DURATION_OPTIONS.map(opt => <SelectItem key={opt} value={opt.toString()} className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">{opt} секунд</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {isCompleted ? (
-            <div className="text-center animate-fadeInScaleUp space-y-3">
-              {fetchedQuote ? (
-                <>
-                  <p className="text-xl sm:text-2xl font-semibold text-green-600 dark:text-green-400">
-                    {name}, ты справился!
-                  </p>
-                  <blockquote className="mt-2 p-3 border-l-4 border-green-500 dark:border-green-400 bg-slate-50 dark:bg-slate-700/50 rounded-r-md">
-                    <p className="italic text-slate-700 dark:text-slate-300 text-sm sm:text-base">"{fetchedQuote.text}"</p>
-                    <footer className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">- {fetchedQuote.author}</footer>
-                  </blockquote>
-                </>
-              ) : (
-                <p className="text-xl sm:text-2xl font-semibold text-green-600 dark:text-green-400">
-                  Загрузка цитаты...
-                </p>
-              )}
-              <p className="text-sm text-slate-600 dark:text-slate-300">Вы успешно завершили таймер {completionCount} раз(а)!</p>
-              <Button onClick={handleReset} variant="outline"
-                className="mt-2 bg-yellow-400 hover:bg-yellow-500 border-yellow-400 hover:border-yellow-500 text-slate-900 font-semibold hover:text-slate-900 dark:bg-yellow-500 dark:hover:bg-yellow-600 dark:border-yellow-500 dark:hover:border-yellow-600 dark:text-slate-900 dark:hover:text-slate-900 py-2 px-4 text-sm sm:text-base"
-              > Попробовать ещё раз </Button>
-            </div>
-          ) : (
-            <div className="text-center space-y-4">
-              {isActive && (
-                <div className="animate-pulseFast">
-                  <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-300 mb-1"> {name}, осталось: </p>
-                  <p className="text-5xl sm:text-6xl font-mono font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 dark:from-purple-400 dark:via-pink-400 dark:to-red-400">
-                    {timeLeft}
-                  </p>
-                </div>
-              )}
-              <div className="flex flex-col sm:flex-row sm:justify-center gap-3 pt-2">
-                {!isActive && (
-                  <Button onClick={handleStart} disabled={!isCardInitialized || (isActive || name.trim() === '')} size="lg" className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-semibold w-full sm:w-auto disabled:opacity-60 py-3 text-base sm:text-lg">
-                    Старт таймера
-                  </Button>
-                )}
-                {isActive && (
-                  <Button onClick={handleReset} variant="destructive" size="lg" className="w-full sm:w-auto py-3 text-base sm:text-lg">
-                    Сброс
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-        {(isClientMounted && !isCompleted && !isActive && completionCount > 0) && (
-           <CardFooter className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 justify-center pb-3 pt-2">
-                <p>Вы уже завершили таймер {completionCount} раз(а). Так держать!</p>
-           </CardFooter>
-        )}
-      </Card>
-      <style jsx global>{`
-        @keyframes fadeInScaleUp { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
-        .animate-fadeInScaleUp { animation: fadeInScaleUp 0.5s ease-out forwards; }
-        @keyframes pulseFast { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.02); } }
-        .animate-pulseFast { animation: pulseFast 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      `}</style>
-    </main>
-  );
+        <MessageInput
+          input={input}
+          onInputChange={setInput}
+          onSubmit={handleSendMessage}
+          isLoading={isLoading}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          theme={theme}
+        />
+      </div>
+    </div>
+  )
 }
 
-export default function Home() {
+export default function TelegramDesktop() {
   return (
-    <ThemeProvider>
-      <TimerComponent />
-    </ThemeProvider>
-  );
+    <TooltipProvider>
+      <TelegramDesktopContent />
+    </TooltipProvider>
+  )
 }
