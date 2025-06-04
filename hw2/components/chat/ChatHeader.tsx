@@ -11,7 +11,6 @@ export function ChatHeader({ chat, messageSearchQuery, onMessageSearchChange, th
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between relative z-10">
       <div className="flex items-center gap-3">
         <Avatar className="h-9 w-9">
-          <AvatarImage src="/placeholder.svg" />
           <AvatarFallback>{chat.avatar}</AvatarFallback>
         </Avatar>
         <div>

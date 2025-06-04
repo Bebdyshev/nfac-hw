@@ -76,7 +76,6 @@ export function ChatList({
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src="/placeholder.svg" />
                       <AvatarFallback className="text-sm">{chat.avatar}</AvatarFallback>
                     </Avatar>
                     {chat.online && (

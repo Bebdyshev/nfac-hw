@@ -161,6 +161,7 @@ function TelegramDesktopContent() {
           } Keep your responses professional but friendly, and always stay in character as a human expert.`,
         },
       ],
+      chatId: selectedChat.id,
     },
     onFinish: (message) => {
       if (!message.content) {
@@ -329,11 +330,17 @@ function TelegramDesktopContent() {
               : "You are a UX/UI designer with extensive experience in creating user-centered designs. You provide insights about design principles, user experience, and visual aesthetics."
           } Keep your responses professional but friendly, and always stay in character as a human expert.`,
         },
+        // Convert previous messages to the format expected by the API
+        ...selectedChat.messages.map(msg => ({
+          role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content
+        })),
         {
           role: "user",
           content: messageContent,
         },
       ],
+      chatId: selectedChat.id, // Include chat ID for context
     }
 
     try {
