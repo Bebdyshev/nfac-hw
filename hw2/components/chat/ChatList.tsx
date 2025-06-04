@@ -69,11 +69,11 @@ export function ChatList({
                 onClick={() => onChatSelect(chat)}
                 onMouseEnter={() => setHoveredChatId(chat.id)}
                 onMouseLeave={() => setHoveredChatId(null)}
-                className={`px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative ${
+                className={`px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative h-[60px] ${
                   selectedChat.id === chat.id ? "bg-blue-50 dark:bg-blue-900/20" : ""
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 h-full">
                   <div className="relative">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="text-sm">{chat.avatar}</AvatarFallback>
@@ -82,28 +82,31 @@ export function ChatList({
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"></div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 flex flex-col justify-center h-full">
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
                         {chat.name}
                         {chat.isPinned && <span className="ml-1">📌</span>}
                         {chat.isFavorite && <StarIcon className="inline-block h-3 w-3 ml-1 text-yellow-400" />}
                       </h3>
-                      <AnimatePresence>
-                        {hoveredChatId !== chat.id && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            <TimeDisplay date={chat.time} />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      <div className="w-[60px] flex justify-end">
+                        <AnimatePresence mode="wait">
+                          {hoveredChatId !== chat.id ? (
+                            <motion.div
+                              key="time"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <TimeDisplay date={chat.time} />
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <div className="flex items-center gap-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 min-w-0 h-[18px]">
                         {chat.id === "1" && (
                           <CheckCheck className="h-3 w-3 text-blue-500 flex-shrink-0" />
                         )}
@@ -116,56 +119,60 @@ export function ChatList({
                 </div>
                 
                 {/* Action buttons - visible on hover */}
-                {hoveredChatId === chat.id && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 bg-gray-100 dark:bg-gray-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleFavorite(chat.id);
-                          }}
-                        >
-                          <StarIcon 
-                            className={`h-4 w-4 ${chat.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'}`} 
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{chat.isFavorite ? 'Remove from favorites' : 'Add to favorites'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 bg-gray-100 dark:bg-gray-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleArchive(chat.id);
-                          }}
-                        >
-                          <ArchiveIcon 
-                            className={`h-4 w-4 ${chat.isArchived ? 'text-blue-500' : 'text-gray-400'}`} 
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{chat.isArchived ? 'Unarchive' : 'Archive'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {hoveredChatId === chat.id && (
+                    <motion.div 
+                      key="actions"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1"
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 bg-gray-100 dark:bg-gray-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleFavorite(chat.id);
+                            }}
+                          >
+                            <StarIcon 
+                              className={`h-4 w-4 ${chat.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'}`} 
+                            />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{chat.isFavorite ? 'Remove from favorites' : 'Add to favorites'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 bg-gray-100 dark:bg-gray-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleArchive(chat.id);
+                            }}
+                          >
+                            <ArchiveIcon 
+                              className={`h-4 w-4 ${chat.isArchived ? 'text-blue-500' : 'text-gray-400'}`} 
+                            />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{chat.isArchived ? 'Unarchive' : 'Archive'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
           </AnimatePresence>
