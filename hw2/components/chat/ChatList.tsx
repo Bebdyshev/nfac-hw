@@ -40,7 +40,7 @@ export function ChatList({
         </div>
       </div>
 
-      <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-700 dark:text-white">
         <Tabs value={activeFilter} onValueChange={onFilterChange} className="w-full">
           <TabsList className="w-full grid grid-cols-3">
             <TabsTrigger value="all">All</TabsTrigger>
@@ -112,11 +112,6 @@ export function ChatList({
                           {chat.lastMessage}
                         </p>
                       </div>
-                      {chat.unread > 0 && (
-                        <span className="ml-2 px-1.5 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                          {chat.unread}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
