@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useChat } from "ai/react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ChatList } from "@/components/chat/ChatList"
 import { ChatHeader } from "@/components/chat/ChatHeader"
 import { MessageList } from "@/components/chat/MessageList"
 import { MessageInput } from "@/components/chat/MessageInput"
 import { Chat, Message } from "@/components/chat/types"
+import { getChats, saveChats, sendMessage } from "@/lib/api"
 
 const mockChats: Chat[] = [
   {
@@ -73,62 +75,63 @@ const mockChats: Chat[] = [
 function TelegramDesktopContent() {
   const [selectedChat, setSelectedChat] = useState<Chat>(mockChats[0])
   const [searchQuery, setSearchQuery] = useState("")
-  const [chats, setChats] = useState<Chat[]>(mockChats)
   const [input, setInput] = useState("")
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [messageSearchQuery, setMessageSearchQuery] = useState("")
   const [activeFilter, setActiveFilter] = useState<string>("all")
+  const queryClient = useQueryClient()
 
-  // Load chats from localStorage on mount
-  useEffect(() => {
-    const savedChats = localStorage.getItem('chats')
-    if (savedChats) {
-      try {
-        const parsedChats = JSON.parse(savedChats)
-        // Convert string timestamps back to Date objects
-        const chatsWithDates = parsedChats.map((chat: any) => ({
-          ...chat,
-          isFavorite: chat.isFavorite || false,
-          isArchived: chat.isArchived || false,
-          messages: chat.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp),
-            replyTo: msg.replyTo ? { ...msg.replyTo, timestamp: new Date(msg.replyTo.timestamp) } : undefined
-          }))
-        }))
-        setChats(chatsWithDates)
-        
-        // Initialize selectedChat based on the active filter
-        const initialSelectable = chatsWithDates.filter((c: Chat) => 
-          activeFilter === "archived" ? c.isArchived : 
-          activeFilter === "favorites" ? c.isFavorite && !c.isArchived : 
-          !c.isArchived
-        )
-        
-        if (initialSelectable.length > 0) {
-          setSelectedChat(initialSelectable[0])
-        } else {
-          const fallback = chatsWithDates.find((c: Chat) => !c.isArchived) || chatsWithDates[0]
-          if (fallback) setSelectedChat(fallback)
-        }
-      } catch (error) {
-        console.error('Error loading chats from localStorage:', error)
-        // If there's an error, use mock data
-        setChats(mockChats)
-        setSelectedChat(mockChats[0])
+  // Query for chats
+  const { data: chats = mockChats } = useQuery({
+    queryKey: ['chats'],
+    queryFn: getChats,
+    initialData: mockChats,
+  })
+
+  // Mutation for saving chats
+  const saveChatsMutation = useMutation({
+    mutationFn: saveChats,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+    },
+  })
+
+  // Mutation for sending messages
+  const sendMessageMutation = useMutation({
+    mutationFn: sendMessage,
+    onSuccess: (data, variables) => {
+      const botMessage: Message = {
+        id: Date.now().toString(),
+        content: data.response,
+        sender: 'bot',
+        timestamp: new Date(),
       }
-    }
-  }, [])
 
-  // Save chats to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('chats', JSON.stringify(chats))
-    } catch (error) {
-      console.error('Error saving chats to localStorage:', error)
-    }
-  }, [chats])
+      queryClient.setQueryData(['chats'], (oldChats: Chat[]) => {
+        const newChats = oldChats.map((chat) =>
+          chat.id === variables.chatId
+            ? {
+                ...chat,
+                lastMessage: data.response,
+                time: new Date().toISOString(),
+                messages: [...chat.messages, botMessage],
+              }
+            : chat
+        )
+        saveChatsMutation.mutate(newChats)
+        return newChats
+      })
+
+      // Update selected chat state
+      setSelectedChat(prev => ({
+        ...prev,
+        lastMessage: data.response,
+        time: new Date().toISOString(),
+        messages: [...prev.messages, botMessage],
+      }))
+    },
+  })
 
   // Theme handling
   useEffect(() => {
@@ -146,137 +149,8 @@ function TelegramDesktopContent() {
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
   }
 
-  const { messages, handleSubmit, isLoading } = useChat({
-    api: "/api/chat",
-    body: {
-      messages: [
-        {
-          role: "system",
-          content: `You are ${selectedChat.name}, a human expert in your field. ${
-            selectedChat.id === "1" 
-              ? "You are a senior software engineer with 10+ years of experience in web development, specializing in React, Node.js, and modern web technologies. You provide practical, code-focused solutions and best practices."
-              : selectedChat.id === "2"
-              ? "You are a data scientist with a PhD in Computer Science, specializing in machine learning, AI, and data analysis. You provide detailed explanations about ML concepts, algorithms, and data processing techniques."
-              : "You are a UX/UI designer with extensive experience in creating user-centered designs. You provide insights about design principles, user experience, and visual aesthetics."
-          } Keep your responses professional but friendly, and always stay in character as a human expert.`,
-        },
-      ],
-      chatId: selectedChat.id,
-    },
-    onFinish: (message) => {
-      if (!message.content) {
-        console.error('No content in bot response:', message)
-        return
-      }
-
-      const botMessage: Message = {
-        id: Date.now().toString(),
-        content: message.content,
-        sender: 'bot',
-        timestamp: new Date(),
-      }
-
-      setChats((prevChats) =>
-        prevChats.map((chat) =>
-          chat.id === selectedChat.id
-            ? {
-                ...chat,
-                lastMessage: message.content,
-                time: new Date().toISOString(),
-                messages: [...chat.messages, botMessage],
-              }
-            : chat
-        )
-      )
-    },
-    onError: (error) => {
-      console.error('Chat error:', error)
-    }
-  })
-
-  // Toggle a chat as favorite
-  const toggleFavorite = (chatId: string) => {
-    setChats(prevChats =>
-      prevChats.map(chat =>
-        chat.id === chatId ? { ...chat, isFavorite: !chat.isFavorite } : chat
-      )
-    )
-  }
-
-  // Toggle a chat as archived
-  const toggleArchive = (chatId: string) => {
-    setChats(prevChats =>
-      prevChats.map(chat =>
-        chat.id === chatId ? { ...chat, isArchived: !chat.isArchived } : chat
-      )
-    )
-  }
-
-  // Filter chats based on search query and active filter
-  const filteredChats = chats.filter((chat) => {
-    // First apply the filter (all, favorites, archived)
-    let passesFilter = false;
-    
-    if (activeFilter === "all") {
-      passesFilter = !chat.isArchived; // All chats except archived
-    } else if (activeFilter === "favorites") {
-      passesFilter = !!chat.isFavorite && !chat.isArchived; // Only favorites that aren't archived
-    } else if (activeFilter === "archived") {
-      passesFilter = !!chat.isArchived; // Only archived chats
-    }
-    
-    if (!passesFilter) return false;
-    
-    // Then apply the search query filter
-    if (!searchQuery.trim()) return true;
-    
-    return (
-      chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  });
-
-  // Update selected chat when filters change
-  useEffect(() => {
-    // Get list of chats that pass the current filter
-    const currentFilteredChats = chats.filter((chat) => {
-      if (activeFilter === "all") return !chat.isArchived;
-      if (activeFilter === "favorites") return !!chat.isFavorite && !chat.isArchived;
-      if (activeFilter === "archived") return !!chat.isArchived;
-      return false;
-    }).filter(chat => {
-      if (!searchQuery.trim()) return true;
-      return chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-             chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
-    });
-    
-    // If the currently selected chat doesn't pass the filter, select a new one
-    if (selectedChat) {
-      const isSelectedStillValid = currentFilteredChats.some(c => c.id === selectedChat.id);
-      if (!isSelectedStillValid) {
-        if (currentFilteredChats.length > 0) {
-          setSelectedChat(currentFilteredChats[0]);
-        } else {
-          // Fallback to a visible chat or the first chat
-          const fallbackList = chats.filter(c => 
-            activeFilter === "archived" ? c.isArchived : !c.isArchived
-          );
-          if (fallbackList.length > 0) {
-            setSelectedChat(fallbackList[0]);
-          } else {
-            setSelectedChat(chats[0]);
-          }
-        }
-      }
-    } else if (currentFilteredChats.length > 0) {
-      setSelectedChat(currentFilteredChats[0]);
-    }
-  }, [chats, activeFilter, searchQuery, selectedChat]);
-
-  // Filter messages based on message search query
-  const filteredMessages = selectedChat.messages.filter(message =>
-    message.content.toLowerCase().includes(messageSearchQuery.toLowerCase())
-  )
+  // Remove the useChat hook since we're using our own mutation
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -285,6 +159,7 @@ function TelegramDesktopContent() {
     const messageContent = input.trim()
     setInput("")
     setReplyTo(null)
+    setIsLoading(true)
 
     const currentTime = new Date()
     const formattedTime = currentTime.toISOString()
@@ -298,8 +173,9 @@ function TelegramDesktopContent() {
       replyTo: replyTo || undefined
     }
 
-    setChats((prevChats) =>
-      prevChats.map((chat) =>
+    // Update local state with user message
+    queryClient.setQueryData(['chats'], (oldChats: Chat[]) => {
+      const newChats = oldChats.map((chat) =>
         chat.id === selectedChat.id
           ? {
               ...chat,
@@ -309,7 +185,9 @@ function TelegramDesktopContent() {
             }
           : chat
       )
-    )
+      saveChatsMutation.mutate(newChats)
+      return newChats
+    })
 
     setSelectedChat((prev) => ({
       ...prev,
@@ -330,7 +208,6 @@ function TelegramDesktopContent() {
               : "You are a UX/UI designer with extensive experience in creating user-centered designs. You provide insights about design principles, user experience, and visual aesthetics."
           } Keep your responses professional but friendly, and always stay in character as a human expert.`,
         },
-        // Convert previous messages to the format expected by the API
         ...selectedChat.messages.map(msg => ({
           role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
           content: msg.content
@@ -340,56 +217,16 @@ function TelegramDesktopContent() {
           content: messageContent,
         },
       ],
-      chatId: selectedChat.id, // Include chat ID for context
+      chatId: selectedChat.id,
     }
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messageData),
-      })
-
-      if (!response.ok) {
-        console.error('Failed to send message:', await response.text())
-        return
-      }
-
-      const data = await response.json()
-
-      const botMessage: Message = {
-        id: Date.now().toString(),
-        content: data.response,
-        sender: 'bot',
-        timestamp: new Date(),
-      }
-
-      setChats((prevChats) =>
-        prevChats.map((chat) =>
-          chat.id === selectedChat.id
-            ? {
-                ...chat,
-                lastMessage: data.response,
-                time: new Date().toISOString(),
-                messages: [...chat.messages, botMessage],
-              }
-            : chat
-        )
-      )
-
-      setSelectedChat((prev) => ({
-        ...prev,
-        lastMessage: data.response,
-        time: new Date().toISOString(),
-        messages: [...prev.messages, botMessage],
-      }))
+      await sendMessageMutation.mutateAsync(messageData)
 
       // Update message status to 'read' after bot responds
       setTimeout(() => {
-        setChats((prevChats) =>
-          prevChats.map((chat) =>
+        queryClient.setQueryData(['chats'], (oldChats: Chat[]) => {
+          const newChats = oldChats.map((chat) =>
             chat.id === selectedChat.id
               ? {
                   ...chat,
@@ -399,13 +236,91 @@ function TelegramDesktopContent() {
                 }
               : chat
           )
-        )
+          saveChatsMutation.mutate(newChats)
+          return newChats
+        })
       }, 1000)
 
     } catch (error) {
       console.error('Error sending message:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
+
+  // Toggle a chat as favorite
+  const toggleFavorite = (chatId: string) => {
+    queryClient.setQueryData(['chats'], (oldChats: Chat[]) => {
+      const newChats = oldChats.map(chat =>
+        chat.id === chatId ? { ...chat, isFavorite: !chat.isFavorite } : chat
+      )
+      saveChatsMutation.mutate(newChats)
+      return newChats
+    })
+  }
+
+  // Toggle a chat as archived
+  const toggleArchive = (chatId: string) => {
+    queryClient.setQueryData(['chats'], (oldChats: Chat[]) => {
+      const newChats = oldChats.map(chat =>
+        chat.id === chatId ? { ...chat, isArchived: !chat.isArchived } : chat
+      )
+      saveChatsMutation.mutate(newChats)
+      return newChats
+    })
+  }
+
+  // Filter chats based on search query and active filter
+  const filteredChats = chats.filter((chat) => {
+    let passesFilter = false;
+    
+    if (activeFilter === "all") {
+      passesFilter = !chat.isArchived;
+    } else if (activeFilter === "favorites") {
+      passesFilter = !!chat.isFavorite && !chat.isArchived;
+    } else if (activeFilter === "archived") {
+      passesFilter = !!chat.isArchived;
+    }
+    
+    if (!passesFilter) return false;
+    
+    if (!searchQuery.trim()) return true;
+    
+    return (
+      chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Update selected chat when filters change
+  useEffect(() => {
+    const currentFilteredChats = filteredChats;
+    
+    if (selectedChat) {
+      const isSelectedStillValid = currentFilteredChats.some(c => c.id === selectedChat.id);
+      if (!isSelectedStillValid) {
+        if (currentFilteredChats.length > 0) {
+          setSelectedChat(currentFilteredChats[0]);
+        } else {
+          const fallbackList = chats.filter(c => 
+            activeFilter === "archived" ? c.isArchived : !c.isArchived
+          );
+          if (fallbackList.length > 0) {
+            setSelectedChat(fallbackList[0]);
+          } else {
+            setSelectedChat(chats[0]);
+          }
+        }
+      }
+    } else if (currentFilteredChats.length > 0) {
+      setSelectedChat(currentFilteredChats[0]);
+    }
+  }, [chats, activeFilter, searchQuery, selectedChat]);
+
+  // Filter messages based on message search query
+  const filteredMessages = selectedChat.messages.filter(message =>
+    message.content.toLowerCase().includes(messageSearchQuery.toLowerCase())
+  )
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">

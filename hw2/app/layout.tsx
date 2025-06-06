@@ -3,13 +3,13 @@ import "./globals.css"
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import { Analytics } from '@vercel/analytics/react'
+import { Providers } from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Telegram-clone",
-  description:
-    "Telegram-clone",
+  title: "Telegram Desktop Clone",
+  description: "A modern Telegram desktop clone built with Next.js",
   icons: {
     icon: [
       {
@@ -32,7 +32,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <Analytics />
       </body>
     </html>
